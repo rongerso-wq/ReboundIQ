@@ -67,6 +67,9 @@ function rateLimit(ip) {
 }
 
 // ----- origin gate -----
+// Production: only Vercel-injected URLs + ALLOWED_ORIGINS env are accepted.
+// Dev convenience (localhost + file://-style `null`) is gated behind
+// ALLOW_DEV_ORIGINS=1 — set that env on Preview, never on Production.
 function isAllowedOrigin(originHeader) {
   if (!originHeader) return false;
   const env = globalThis.process?.env || {};
@@ -75,8 +78,10 @@ function isAllowedOrigin(originHeader) {
   if (env.VERCEL_BRANCH_URL)              allowed.push('https://' + env.VERCEL_BRANCH_URL);
   if (env.VERCEL_PROJECT_PRODUCTION_URL)  allowed.push('https://' + env.VERCEL_PROJECT_PRODUCTION_URL);
   if (allowed.includes(originHeader)) return true;
-  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(originHeader)) return true;
-  if (originHeader === 'null') return true; // file:// origins
+  if (env.ALLOW_DEV_ORIGINS === '1') {
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(originHeader)) return true;
+    if (originHeader === 'null') return true; // file:// origins (Chrome sends `null`)
+  }
   return false;
 }
 
@@ -99,13 +104,25 @@ function validateInput(body) {
 // markers or sneak prompt injection past the system-prompt boundary.
 // Built via String.fromCharCode so the escape sequences survive tooling that
 // might collapse unicode literals into raw code points.
+//
+// Coverage:
+//   C0 controls (0x00–0x1F) + DEL (0x7F)
+//   Mongolian vowel separator (0x180E — historically zero-width)
+//   Zero-width chars + bidi marks (0x200B–0x200F)
+//   Bidi embedding/override (0x202A–0x202E)
+//   Word joiner + invisible operators (0x2060–0x2064)
+//   Isolate controls (0x2066–0x2069)
+//   Byte order mark / zero-width no-break space (0xFEFF)
 const STRIP_INVISIBLES = new RegExp(
   '[' +
   String.fromCharCode(0x00) + '-' + String.fromCharCode(0x1F) +
   String.fromCharCode(0x7F) +
+  String.fromCharCode(0x180E) +
   String.fromCharCode(0x200B) + '-' + String.fromCharCode(0x200F) +
   String.fromCharCode(0x202A) + '-' + String.fromCharCode(0x202E) +
+  String.fromCharCode(0x2060) + '-' + String.fromCharCode(0x2064) +
   String.fromCharCode(0x2066) + '-' + String.fromCharCode(0x2069) +
+  String.fromCharCode(0xFEFF) +
   ']',
   'g'
 );
@@ -139,7 +156,9 @@ function sanitizeContext(ctx) {
   }
   for (const k of CTX_ARRAY_FIELDS) {
     if (Array.isArray(ctx[k])) {
-      out[k] = ctx[k].slice(0, 5).map(x => String(x).replace(STRIP_CONTROLS, '').slice(0, 160));
+      // STRIP_INVISIBLES (not STRIP_CONTROLS) so zero-width chars can't smuggle
+      // role markers into the patient_context block.
+      out[k] = ctx[k].slice(0, 5).map(x => String(x).replace(STRIP_INVISIBLES, '').slice(0, 160));
     }
   }
   return Object.keys(out).length ? out : null;
@@ -167,9 +186,12 @@ export default async function handler(req) {
   const origin = req.headers.get('origin') || '';
   if (!isAllowedOrigin(origin)) return err('FORBIDDEN_ORIGIN', 403);
 
+  // IP attribution. If we can't attribute, reject — don't let unattributed
+  // requests share a single bucket (would poison every honest caller).
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
           || req.headers.get('cf-connecting-ip')
-          || 'unknown';
+          || '';
+  if (!ip) return err('BAD_REQUEST', 400);
   if (!rateLimit(ip)) return err('RATE_LIMITED', 429);
 
   const env = globalThis.process?.env || {};
@@ -177,6 +199,10 @@ export default async function handler(req) {
 
   const ct = req.headers.get('content-type') || '';
   if (!ct.includes('application/json')) return err('UNSUPPORTED_MEDIA_TYPE', 415);
+
+  // Early reject before buffering the body.
+  const declaredLen = Number(req.headers.get('content-length') || 0);
+  if (declaredLen > MAX_BODY_BYTES) return err('TOO_LARGE', 413);
 
   let raw;
   try { raw = await req.text(); } catch { return err('BAD_REQUEST', 400); }
@@ -187,6 +213,16 @@ export default async function handler(req) {
 
   const v = validateInput(body);
   if (v) return err(v, 400);
+
+  // Sanitize EVERY user message before the red-flag check + before
+  // forwarding upstream. Zero-width chars (e.g. `sui​cide`) would
+  // otherwise bypass detection because the regex \b anchors fail across
+  // an invisible glyph.
+  for (const m of body.messages) {
+    if (typeof m.content === 'string') {
+      m.content = m.content.replace(STRIP_INVISIBLES, '');
+    }
+  }
 
   // Red-flag refusal happens BEFORE forwarding to Anthropic.
   const lastMsg = body.messages[body.messages.length - 1];

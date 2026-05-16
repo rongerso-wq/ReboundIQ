@@ -3199,18 +3199,8 @@
     "Explain my maintenance plan in plain terms."
   ];
 
-  const COACH_ERROR_MESSAGES = {
-    NOT_CONFIGURED: 'The AI coach isn’t configured yet — the Anthropic API key needs to be set on the server (ANTHROPIC_API_KEY). This is expected when running locally via file:// or without `vercel dev`; the coach activates on the Vercel deploy.',
-    RATE_LIMITED: 'You’re sending messages too quickly. Please wait about a minute and try again.',
-    UPSTREAM_ERROR: 'The coach is temporarily unavailable. Please try again in a moment.',
-    UPSTREAM_UNREACHABLE: 'Cannot reach the coach service. Check your network and try again.',
-    TOO_LARGE: 'Your message is too long. Please shorten it and try again.',
-    BAD_REQUEST: 'There was a problem with your request. Please refresh and try again.',
-    FORBIDDEN_ORIGIN: 'This page is not authorized to use the coach. (Origin mismatch — check the ALLOWED_ORIGINS env on Vercel.)',
-    UNPARSEABLE: 'The coach returned an unparseable response. Please try again.',
-    METHOD_NOT_ALLOWED: 'Unexpected request. Please refresh and try again.',
-    UNSUPPORTED_MEDIA_TYPE: 'Unexpected content type. Please refresh and try again.'
-  };
+  // Error messages live in STRINGS as `coach.err.{CODE}` keys (EN + HE).
+  // postToCoachAPI throws `new Error(code)` and CoachTab resolves it via t().
 
   async function postToCoachAPI({ messages, patientContext }) {
     let res;
