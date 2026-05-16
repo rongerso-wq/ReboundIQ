@@ -318,7 +318,7 @@
     .demo-card:hover {
       border-color: var(--nn-navy);
       transform: translateY(-2px);
-      box-shadow: 0 12px 32px -18px rgba(0, 16, 63, 0.20);
+      /* No box-shadow — editorial Novo rule (no shadows anywhere). */
     }
 
     /* Coach chat thread */
@@ -449,6 +449,12 @@
     }
     /* Chat sender label stays LTR for proper English/Hebrew mix */
     :root[lang="he"] .coach-sender { letter-spacing: 0.10em; }
+    /* Hebrew is case-less; uppercase + 0.10em tracking mangle letter shapes. Reset. */
+    :root[lang="he"] .mode-btn {
+      letter-spacing: 0;
+      text-transform: none;
+      font-size: 13px;
+    }
 
     /* Skip link — sr-only until focused */
     .skip-link {
@@ -538,6 +544,60 @@
         vertical-align: bottom;
       }
     }
+
+    /* Portfolio lineup (PlanTab strategy banner) */
+    .lineup-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    @media (min-width: 768px) {
+      .lineup-row { grid-template-columns: repeat(6, 1fr); }
+    }
+    .lineup-chip {
+      padding: 14px 12px 12px;
+      border: 1px solid var(--nn-hair);
+      background: #fff;
+      text-align: center;
+      position: relative;
+      transition: border-color 160ms;
+    }
+    .lineup-chip .lineup-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--nn-ink-dim);
+      letter-spacing: -0.005em;
+      line-height: 1.2;
+    }
+    .lineup-chip .lineup-sub {
+      font-size: 9.5px;
+      color: var(--nn-ink-dim);
+      letter-spacing: 0.02em;
+      margin-top: 4px;
+      line-height: 1.25;
+      min-height: 22px;
+      opacity: 0.7;
+    }
+    .lineup-chip .lineup-mark {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--nn-blue);
+      margin-top: 6px;
+      min-height: 11px;
+      font-weight: 600;
+    }
+    .lineup-chip.current {
+      border-bottom: 2px solid var(--nn-navy);
+      padding-bottom: 11px;
+    }
+    .lineup-chip.current .lineup-label { color: var(--nn-navy); }
+    .lineup-chip.current .lineup-sub   { color: var(--nn-ink-soft); opacity: 1; }
+    .lineup-chip.target {
+      border: 1px dashed var(--nn-blue);
+    }
+    .lineup-chip.target .lineup-label { color: var(--nn-blue); }
+    .lineup-chip.target .lineup-sub   { color: var(--nn-blue); opacity: 0.8; }
 
     /* Cohort table */
     .cohort-table {
@@ -850,6 +910,10 @@
       'plan.title': 'Maintenance Rx.',
       'plan.body': "Portfolio-aware. The strategy is chosen from the risk bucket plus this patient's comorbidities and preferences. Every threshold here carries a citation.",
       'plan.strategy.eyebrow': 'Strategy',
+      'plan.lineup.eyebrow': 'Portfolio at a glance',
+      'plan.lineup.current': 'Current',
+      'plan.lineup.target': 'Bridge target',
+      'plan.lineup.bridgeNote': 'Bridging from {from} to {to} via OASIS 4 protocol — buys 12 months of protection before discontinuation.',
       'plan.glance.title': 'At a glance',
       'plan.glance.agent': 'Current agent',
       'plan.glance.weeks': 'Weeks on therapy',
@@ -1200,6 +1264,10 @@
       'plan.title': 'תוכנית תחזוקה.',
       'plan.body': 'מודע־פורטפוליו. האסטרטגיה נבחרת מדרגת הסיכון בתוספת המחלות הנלוות וההעדפות של המטופל. כל סף כאן נושא ציטוט.',
       'plan.strategy.eyebrow': 'אסטרטגיה',
+      'plan.lineup.eyebrow': 'הפורטפוליו במבט',
+      'plan.lineup.current': 'נוכחי',
+      'plan.lineup.target': 'יעד גישור',
+      'plan.lineup.bridgeNote': 'גישור מ־{from} ל־{to} בפרוטוקול OASIS 4 — קונה 12 חודשי הגנה לפני הפסקה.',
       'plan.glance.title': 'במבט',
       'plan.glance.agent': 'סוכן נוכחי',
       'plan.glance.weeks': 'שבועות בטיפול',
@@ -1527,10 +1595,10 @@
                 <p>{t('home.opp.p1')}</p>
                 <p className="mt-5">{t('home.opp.p2')}</p>
                 <p className="mt-6">
-                  <span className="arrow-link" role="link" onClick={()=>setActive('risk')}>
+                  <button type="button" className="arrow-link" onClick={()=>setActive('risk')}>
                     {t('home.opp.cta')}
                     <I.arrow style={{width:14,height:14}}/>
-                  </span>
+                  </button>
                 </p>
               </div>
             </div>
@@ -2303,7 +2371,7 @@
 
           {/* Sarcopenic obesity warning */}
           {r.sarcopenicFlag && (
-            <div className="mt-12 border-l-2 p-6 md:p-7" style={{borderColor:'var(--nn-bad)', background:'#FDF6F4'}}>
+            <div className="mt-12 border-l-2 p-6 md:p-7" style={{borderColor:'var(--nn-bad)'}}>
               <div className="eyebrow mb-2" style={{color:'var(--nn-bad)'}}>{t('risk.sarc.eyebrow')}</div>
               <div className="text-[16px] font-semibold tracking-tight mb-2" style={{color:'var(--nn-navy)'}}>
                 {t('risk.sarc.title')}
@@ -2815,6 +2883,48 @@
     return { strategy, lifestyle, followUp, redFlags, alerts, bucket };
   }
 
+  // ---------- AgentLineup ----------
+  // Renders the six Novo agents as a hairline-chip row. The patient's current
+  // agent is navy-underlined; the bridge target (when strategy === 'bridge-oral')
+  // is dashed-blue. Makes the "portfolio-aware" claim visually true instead of
+  // only narrated.
+  function AgentLineup({ currentAgent, strategy }) {
+    const t = useT();
+    const isBridge = strategy?.key === 'bridge-oral';
+    const bridgeTarget = isBridge ? 'wegovy_oral' : null;
+    return (
+      <div className="mt-10">
+        <div className="eyebrow mb-4">{t('plan.lineup.eyebrow')}</div>
+        <div className="lineup-row" role="list" aria-label={t('plan.lineup.eyebrow')}>
+          {AGENT_OPTIONS.map(opt => {
+            const isCurrent = opt.v === currentAgent;
+            const isTarget  = opt.v === bridgeTarget;
+            return (
+              <div key={opt.v} role="listitem"
+                   className={`lineup-chip ${isCurrent ? 'current' : ''} ${isTarget ? 'target' : ''}`}
+                   aria-current={isCurrent ? 'true' : undefined}>
+                <div className="lineup-label">{opt.l}</div>
+                <div className="lineup-sub">{opt.sub}</div>
+                <div className="lineup-mark">
+                  {isCurrent && t('plan.lineup.current')}
+                  {isTarget  && !isCurrent && t('plan.lineup.target')}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {isBridge && (
+          <p className="mt-4 text-[12.5px] leading-[1.6]" style={{color:'var(--nn-blue)'}}>
+            {t('plan.lineup.bridgeNote', {
+              from: labelForAgent(currentAgent),
+              to:   labelForAgent(bridgeTarget)
+            })}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   // ---------- PlanTab ----------
   function PlanTab({ state, setActive }) {
     const t = useT();
@@ -2875,6 +2985,9 @@
                 </div>
               </div>
             </div>
+
+            {/* Portfolio lineup — makes the portfolio-aware claim visually true. */}
+            <AgentLineup currentAgent={state.agent} strategy={rx.strategy} />
           </div>
 
           {/* Alerts */}
@@ -2883,8 +2996,7 @@
               {rx.alerts.map((a, i) => (
                 <div key={i} className="border-l-2 p-4 md:p-5"
                      style={{
-                       borderColor: a.tone === 'bad' ? 'var(--nn-bad)' : a.tone === 'warn' ? 'var(--nn-warn)' : a.tone === 'good' ? 'var(--nn-good)' : 'var(--nn-blue)',
-                       background: a.tone === 'bad' ? '#FDF6F4' : a.tone === 'warn' ? '#FBF7EE' : a.tone === 'good' ? '#F2F8F4' : '#F2F6FB'
+                       borderColor: a.tone === 'bad' ? 'var(--nn-bad)' : a.tone === 'warn' ? 'var(--nn-warn)' : a.tone === 'good' ? 'var(--nn-good)' : 'var(--nn-blue)'
                      }}>
                   <div className="text-[13px] font-semibold mb-1" style={{color:'var(--nn-navy)'}}>{a.title}</div>
                   <div className="text-[13px] leading-[1.55]" style={{color:'var(--nn-ink-soft)'}}>{a.body}</div>
@@ -3223,7 +3335,7 @@
           </p>
 
           {/* Disclosure */}
-          <div className="mt-10 border-l-2 p-5" style={{borderColor:'var(--nn-blue)', background:'#F2F6FB'}}>
+          <div className="mt-10 border-l-2 p-5" style={{borderColor:'var(--nn-blue)'}}>
             <div className="eyebrow mb-2" style={{color:'var(--nn-blue)'}}>{t('coach.disclosure.eyebrow')}</div>
             <p className="text-[13.5px] leading-[1.6]" style={{color:'var(--nn-ink-soft)'}}>
               {t('coach.disclosure.body')}
@@ -3268,7 +3380,7 @@
 
             {/* Error */}
             {error && (
-              <div className="mt-6 border-l-2 p-4 md:p-5" style={{borderColor:'var(--nn-bad)', background:'#FDF6F4'}}>
+              <div className="mt-6 border-l-2 p-4 md:p-5" style={{borderColor:'var(--nn-bad)'}}>
                 <div className="text-[13px] font-semibold mb-1" style={{color:'var(--nn-navy)'}}>{t('coach.error.title')}</div>
                 <div className="text-[13.5px] leading-[1.55]" style={{color:'var(--nn-ink-soft)'}}>{error}</div>
               </div>
