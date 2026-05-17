@@ -324,6 +324,46 @@
       /* No box-shadow — editorial Novo rule (no shadows anywhere). */
     }
 
+    /* Demo flow toast — small editorial confirmation, bottom-center */
+    .nn-toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      z-index: 100;
+      background: #001036;
+      color: rgba(255,255,255,0.96);
+      padding: 12px 20px;
+      font-size: 13px;
+      letter-spacing: 0.01em;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 200ms ease-out, transform 200ms cubic-bezier(0.16,1,0.3,1);
+    }
+    .nn-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .nn-toast .toast-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #29C26F;
+      box-shadow: 0 0 6px #29C26F;
+    }
+    .nn-toast .toast-meta {
+      font-size: 11px;
+      color: rgba(255,255,255,0.55);
+      letter-spacing: 0.04em;
+    }
+
+    /* Home stat source link — quiet underline, hovers up to navy/blue */
+    .stat-source-link { transition: color 160ms, text-decoration-color 160ms; }
+    .stat-source-link:hover {
+      color: var(--nn-blue) !important;
+      text-decoration-color: var(--nn-blue) !important;
+    }
+
     /* Mobile tab strip — soft right-edge fade so users know it scrolls */
     .mobile-tab-strip {
       -webkit-mask-image: linear-gradient(to right, black 88%, transparent 100%);
@@ -338,6 +378,11 @@
     .traj-chart-wrap { min-width: 480px; }
     @media (min-width: 480px) { .traj-chart-wrap { min-width: 0; } }
     .traj-chart-scroller { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    /* Animate the curve morph when the adherence slider moves.
+       Modern browsers transition the path 'd' attribute when it changes —
+       both curves use the same sample count so the morph is well-defined. */
+    .traj-path { transition: d 240ms cubic-bezier(0.4, 0, 0.2, 1); }
+    .traj-marker { transition: cx 240ms cubic-bezier(0.4, 0, 0.2, 1), cy 240ms cubic-bezier(0.4, 0, 0.2, 1); }
 
     /* Coach chat thread */
     .coach-thread {
@@ -666,6 +711,25 @@
     .cohort-table tbody td.col-dim {
       color: var(--nn-ink-dim);
     }
+    /* Sticky first column on mobile horizontal-scroll — preserves the Risk
+       pill as a stable anchor while the user scans the rest of the row. */
+    @media (max-width: 900px) {
+      .cohort-table thead th:first-child,
+      .cohort-table tbody td:first-child {
+        position: sticky;
+        left: 0;
+        background: #fff;
+        z-index: 1;
+        box-shadow: 1px 0 0 var(--nn-hair-2);
+      }
+      .cohort-table thead th:first-child { background: var(--nn-bg-2); }
+      .cohort-table tbody tr:hover td:first-child { background: var(--nn-bg-2); }
+      :root[dir="rtl"] .cohort-table thead th:first-child,
+      :root[dir="rtl"] .cohort-table tbody td:first-child {
+        left: auto; right: 0;
+        box-shadow: -1px 0 0 var(--nn-hair-2);
+      }
+    }
   </style>
 </head>
 <body>
@@ -694,7 +758,12 @@
     en: {
       // Chrome
       'app.tag': 'Created by Roni Gershonovitch',
-      'app.version': 'v0.4 · Phase 8',
+      'app.version': 'v0.5 · Phase 8',
+      'toast.demoLoaded': '{name} loaded',
+      'toast.fields': '{n} fields populated',
+      'toast.linkCopied': 'Link copied — paste to share',
+      'toast.linkRestored': 'Assessment restored from link',
+      'toast.linkError': 'Could not restore — link is invalid or expired',
       'app.audience': 'Audience',
       'app.audience.hcp': 'Clinician',
       'app.audience.patient': 'Patient',
@@ -833,6 +902,7 @@
       'intake.progress.of': 'of',
       'intake.progress.suffix': 'fields completed',
       'intake.cta.clear': 'Clear all',
+      'intake.cta.share': 'Share assessment',
       'intake.cta.compute': 'Compute risk',
       'sex.f': 'Female',
       'sex.m': 'Male',
@@ -1048,7 +1118,12 @@
     he: {
       // Chrome
       'app.tag': 'נוצר ע״י רוני גרשונוביץ׳',
-      'app.version': 'v0.4 · שלב 8',
+      'app.version': 'v0.5 · שלב 8',
+      'toast.demoLoaded': '{name} נטען',
+      'toast.fields': '{n} שדות מולאו',
+      'toast.linkCopied': 'הקישור הועתק — הדבק לשיתוף',
+      'toast.linkRestored': 'הערכה שוחזרה מהקישור',
+      'toast.linkError': 'לא ניתן לשחזר — הקישור לא תקין או פג תוקף',
       'app.audience': 'קהל',
       'app.audience.hcp': 'רופא/ה',
       'app.audience.patient': 'מטופל/ת',
@@ -1187,6 +1262,7 @@
       'intake.progress.of': 'מתוך',
       'intake.progress.suffix': 'שדות הושלמו',
       'intake.cta.clear': 'נקה הכל',
+      'intake.cta.share': 'שתף הערכה',
       'intake.cta.compute': 'חשב סיכון',
       'sex.f': 'נקבה',
       'sex.m': 'זכר',
@@ -1428,7 +1504,7 @@
     { key: 'eclinm-2026', authors: 'eClinicalMedicine', year: '2026', journal: 'Lancet eClinicalMedicine',
       title: 'Trajectory of weight regain after cessation of GLP-1 receptor agonists: a systematic review and nonlinear meta-regression.',
       anchor: 'Rate constant 0.0302/wk (half-life 23 wks). Plateau at ~75.3% of lost weight regained.',
-      doi: '10.1016/j.eclinm.2026.103xxx', url: 'https://www.thelancet.com/journals/eclinm/article/PIIS2589-5370(26)00043-X/fulltext' },
+      pii: 'PIIS2589-5370(26)00043-X', forthcoming: true, url: 'https://www.thelancet.com/journals/eclinm/article/PIIS2589-5370(26)00043-X/fulltext' },
     { key: 'eclinm-2025', authors: 'eClinicalMedicine', year: '2025', journal: 'Lancet eClinicalMedicine',
       title: 'Metabolic rebound after GLP-1 receptor agonist discontinuation: a systematic review and meta-analysis.',
       anchor: 'BMI, waist circumference, BP, HbA1c, LDL-c all rebound within 12 months of cessation.',
@@ -1597,9 +1673,9 @@
         {/* Headline statistics — pull-quote band */}
         <section className="hair-top">
           <div className="max-w-[1240px] mx-auto px-5 md:px-8 py-14 md:py-20 grid md:grid-cols-3 gap-10 md:gap-14">
-            <Stat figure="11.6" suffix="pp" label={t('home.stat1.label')} source="STEP 1 extension · Wilding 2022"/>
-            <Stat figure="75.3" suffix="%"  label={t('home.stat2.label')} source="Lancet eClinicalMedicine 2026"/>
-            <Stat figure="40–60" suffix="%" label={t('home.stat3.label')} source="MedCentral 2025"/>
+            <Stat figure="11.6" suffix="pp" label={t('home.stat1.label')} source="STEP 1 extension · Wilding 2022" sourceKey="wilding-2022" setActive={setActive}/>
+            <Stat figure="75.3" suffix="%"  label={t('home.stat2.label')} source="Lancet eClinicalMedicine 2026" sourceKey="eclinm-2026" setActive={setActive}/>
+            <Stat figure="40–60" suffix="%" label={t('home.stat3.label')} source="MedCentral 2025" sourceKey="medcentral-2025" setActive={setActive}/>
           </div>
         </section>
 
@@ -1680,7 +1756,17 @@
     );
   }
 
-  function Stat({figure, suffix, label, source}) {
+  function Stat({figure, suffix, label, source, sourceKey, setActive}) {
+    const onSourceClick = (e) => {
+      if (!sourceKey || !setActive) return;
+      e.preventDefault();
+      setActive('refs');
+      // Allow tab content to mount, then scroll to the matching ref entry.
+      setTimeout(() => {
+        const el = document.getElementById('ref-' + sourceKey);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
+    };
     return (
       <div>
         <div className="flex items-baseline gap-2">
@@ -1688,7 +1774,15 @@
           <span className="text-[20px] md:text-[26px] font-light num" style={{color:'var(--nn-ink-soft)'}}>{suffix}</span>
         </div>
         <div className="mt-5 text-[14.5px] leading-[1.6] max-w-[320px]" style={{color:'var(--nn-ink-soft)'}}>{label}</div>
-        <div className="mt-3 text-[11.5px] uppercase tracking-[0.10em]" style={{color:'var(--nn-ink-dim)'}}>{source}</div>
+        {sourceKey ? (
+          <a href={'#ref-' + sourceKey} onClick={onSourceClick}
+             className="stat-source-link mt-3 inline-block text-[11.5px] uppercase tracking-[0.10em]"
+             style={{color:'var(--nn-ink-dim)', textDecoration:'underline', textDecorationColor:'rgba(0,16,63,0.15)', textUnderlineOffset:'3px'}}>
+            {source}
+          </a>
+        ) : (
+          <div className="mt-3 text-[11.5px] uppercase tracking-[0.10em]" style={{color:'var(--nn-ink-dim)'}}>{source}</div>
+        )}
       </div>
     );
   }
@@ -1797,6 +1891,42 @@
       }
     }
   ];
+
+  // ---------- URL hash share / restore ----------
+  // Opt-in client-side share. Encodes the current `data` state to a base64
+  // string in the URL hash. No server persistence; closing without sharing
+  // still wipes state per the no-persistence rule. The hash form lets HCPs
+  // send a colleague a link that restores the exact assessment.
+  function encodeAssessment(data) {
+    try {
+      // Drop empty-string fields to keep the URL short.
+      const trimmed = {};
+      for (const k in data) {
+        const v = data[k];
+        if (v === '' || v === null || v === undefined) continue;
+        if (typeof v === 'boolean' && v === false) continue;
+        trimmed[k] = v;
+      }
+      const json = JSON.stringify(trimmed);
+      return btoa(unescape(encodeURIComponent(json)));
+    } catch { return null; }
+  }
+  function decodeAssessment(hash) {
+    try {
+      const m = hash.match(/[#&]a=([A-Za-z0-9+/=_-]+)/);
+      if (!m) return null;
+      const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+      const json = decodeURIComponent(escape(atob(b64)));
+      const parsed = JSON.parse(json);
+      if (!parsed || typeof parsed !== 'object') return null;
+      // Whitelist against INITIAL_STATE keys to avoid prototype pollution.
+      const out = { ...INITIAL_STATE };
+      for (const k of Object.keys(INITIAL_STATE)) {
+        if (k in parsed) out[k] = parsed[k];
+      }
+      return out;
+    } catch { return null; }
+  }
 
   // ---------- Derived helpers ----------
   function num(v) { return v === '' || v === null || v === undefined ? null : Number(v); }
@@ -1922,13 +2052,23 @@
   }
 
   // ---------- IntakeTab ----------
-  function IntakeTab({ state, set, setActive, loadDemo, resetState }) {
+  function IntakeTab({ state, set, setActive, loadDemo, resetState, showToast }) {
     const t = useT();
     const bmi      = fmtBMI(state);
     const pctNow   = fmtPctLoss(state.baselineWeightKg, state.currentWeightKg);
     const pctWk20  = fmtPctLoss(state.baselineWeightKg, state.week20WeightKg);
     const leanPct  = fmtLeanPct(state);
     const count    = filledFieldCount(state);
+
+    const loadDemoWithToast = (patient) => {
+      loadDemo(patient.data);
+      if (showToast) {
+        showToast(
+          t('toast.demoLoaded', { name: t(patient.nameKey) }),
+          t('toast.fields', { n: filledFieldCount(patient.data) })
+        );
+      }
+    };
 
     // Resolve labelKey on option groups at render time
     const sexOpts = SEX_OPTIONS.map(o => ({...o, l: t(o.labelKey)}));
@@ -1951,7 +2091,7 @@
             <div className="eyebrow mb-5">{t('intake.quickload')}</div>
             <div className="grid md:grid-cols-3 gap-4 md:gap-5">
               {DEMO_PATIENTS.map(p => (
-                <button key={p.id} type="button" className="demo-card" onClick={()=>loadDemo(p.data)}>
+                <button key={p.id} type="button" className="demo-card" onClick={()=>loadDemoWithToast(p)}>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div>
                       <div className="text-[10.5px] uppercase tracking-[0.14em] mb-1.5" style={{color:'var(--nn-ink-dim)'}}>{t(p.nameKey)}</div>
@@ -2074,6 +2214,21 @@
             <div className="flex flex-wrap items-center gap-5">
               <button type="button" className="arrow-link" onClick={resetState}>
                 {t('intake.cta.clear')}
+                <I.arrow style={{width:14,height:14}}/>
+              </button>
+              <button type="button" className="arrow-link" onClick={async()=>{
+                const code = encodeAssessment(state);
+                if (!code) return;
+                const url = window.location.origin + window.location.pathname + '#a=' + code;
+                try {
+                  await navigator.clipboard.writeText(url);
+                  if (showToast) showToast(t('toast.linkCopied'));
+                } catch {
+                  // Fallback: surface the URL in a prompt for manual copy
+                  window.prompt(t('intake.cta.share'), url);
+                }
+              }}>
+                {t('intake.cta.share')}
                 <I.arrow style={{width:14,height:14}}/>
               </button>
               <button type="button" className="btn btn-primary" onClick={()=>setActive('risk')}>
@@ -2480,8 +2635,11 @@
     const sx = (t) => PAD_L + (t / lastT) * innerW;
     const sy = (w) => PAD_T + (1 - (w - yMin) / (yMax - yMin)) * innerH;
 
-    const ptsDo  = points.map(p => `${sx(p.t)},${sy(p.weightDoNothing)}`).join(' ');
-    const ptsPlan = points.map(p => `${sx(p.t)},${sy(p.weightWithPlan)}`).join(' ');
+    // Build <path d="M..."> strings instead of <polyline points="..."> so the
+    // curve morph can be CSS-transitioned (only `d` transitions smoothly).
+    const pathFor = (key) => points.map((p, i) => `${i === 0 ? 'M' : 'L'}${sx(p.t).toFixed(1)},${sy(p[key]).toFixed(2)}`).join(' ');
+    const pathDo   = pathFor('weightDoNothing');
+    const pathPlan = pathFor('weightWithPlan');
 
     const endDo   = points[points.length - 1].weightDoNothing;
     const endPlan = points[points.length - 1].weightWithPlan;
@@ -2510,13 +2668,13 @@
         </text>
 
         {/* do-nothing curve */}
-        <polyline points={ptsDo} fill="none" stroke="var(--nn-bad)" strokeWidth="1.4" strokeDasharray="4 4" opacity="0.65" />
+        <path d={pathDo} className="traj-path" fill="none" stroke="var(--nn-bad)" strokeWidth="1.4" strokeDasharray="4 4" opacity="0.65" />
         {/* plan curve */}
-        <polyline points={ptsPlan} fill="none" stroke="var(--nn-navy)" strokeWidth="2.2" />
+        <path d={pathPlan} className="traj-path" fill="none" stroke="var(--nn-navy)" strokeWidth="2.2" />
 
         {/* terminal markers */}
-        <circle cx={sx(lastT)} cy={sy(endDo)}   r="3" fill="var(--nn-bad)"  opacity="0.7"/>
-        <circle cx={sx(lastT)} cy={sy(endPlan)} r="4" fill="var(--nn-navy)"/>
+        <circle className="traj-marker" cx={sx(lastT)} cy={sy(endDo)}   r="3" fill="var(--nn-bad)"  opacity="0.7"/>
+        <circle className="traj-marker" cx={sx(lastT)} cy={sy(endPlan)} r="4" fill="var(--nn-navy)"/>
 
         {/* axis labels */}
         {xTicks.map((tt, i) => (
@@ -3560,7 +3718,7 @@
   ];
 
   // ---------- CohortTab (HCP-only) ----------
-  function CohortTab({ setActive, loadDemo }) {
+  function CohortTab({ setActive, loadDemo, showToast }) {
     const t = useT();
     const lang = useLang();
     const [sortKey, setSortKey] = useState('risk'); // 'risk' | 'age' | 'agent' | 'weeks' | 'lossPct'
@@ -3602,6 +3760,9 @@
 
     function loadAndOpen(p) {
       loadDemo(p.data);
+      if (showToast) {
+        showToast(`${p.id} · ${p.initials}`, t('toast.fields', { n: filledFieldCount(p.data) }));
+      }
       setActive('risk');
     }
 
@@ -3971,9 +4132,9 @@
 
           <div className="mt-12 max-w-[920px]">
             {REFERENCES.map(r => (
-              <article key={r.key} className="ref-row grid md:grid-cols-12 gap-4">
+              <article key={r.key} id={`ref-${r.key}`} className="ref-row grid md:grid-cols-12 gap-4" style={{scrollMarginTop:'80px'}}>
                 <div className="md:col-span-3 text-[12px] num tracking-[0.04em]" style={{color:'var(--nn-ink-dim)'}}>
-                  <div>{r.year}</div>
+                  <div>{r.year}{r.forthcoming && <span className="ml-2 text-[10px] uppercase tracking-[0.14em]" style={{color:'var(--nn-blue)'}}>· forthcoming</span>}</div>
                   <div className="mt-1" style={{color:'var(--nn-ink-soft)'}}>{r.journal}</div>
                 </div>
                 <div className="md:col-span-9">
@@ -3988,6 +4149,7 @@
                     {r.pmid &&  <span className="num" style={{color:'var(--nn-ink-dim)'}}>PMID {r.pmid}</span>}
                     {r.pmcid && <span className="num" style={{color:'var(--nn-ink-dim)'}}>{r.pmcid}</span>}
                     {r.doi &&   <span className="num" style={{color:'var(--nn-ink-dim)'}}>DOI {r.doi}</span>}
+                    {r.pii &&   <span className="num" style={{color:'var(--nn-ink-dim)'}}>PII {r.pii}</span>}
                   </div>
                 </div>
               </article>
@@ -4054,6 +4216,14 @@
     const [active, setActive] = useState('home');
     const [data, setData]     = useState(INITIAL_STATE);
     const [lang, setLang]     = useState('en');
+    const [toast, setToast]   = useState(null); // { message, meta?, key }
+    const toastTimerRef = useRef(null);
+
+    const showToast = (message, meta) => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setToast({ message, meta: meta || null, key: Date.now() });
+      toastTimerRef.current = setTimeout(() => setToast(null), 1800);
+    };
 
     const set         = (key, val) => setData(prev => ({ ...prev, [key]: val }));
     const loadDemo    = (demoData) => setData({ ...INITIAL_STATE, ...demoData });
@@ -4072,6 +4242,30 @@
       document.documentElement.lang = lang;
       document.documentElement.dir = (lang === 'he') ? 'rtl' : 'ltr';
     }, [lang]);
+
+    // On mount: if URL contains a shared assessment hash, restore it.
+    useEffect(() => {
+      if (typeof window === 'undefined') return;
+      const hash = window.location.hash || '';
+      if (!hash || !hash.includes('a=')) return;
+      const restored = decodeAssessment(hash);
+      if (restored) {
+        setData(restored);
+        setActive('risk'); // user expects to land on the result
+        // Clear the hash so refresh doesn't restore stale state silently
+        try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch {}
+        setTimeout(() => {
+          const msg = STRINGS[lang]?.['toast.linkRestored'] || STRINGS.en['toast.linkRestored'];
+          showToast(msg);
+        }, 200);
+      } else {
+        setTimeout(() => {
+          const msg = STRINGS[lang]?.['toast.linkError'] || STRINGS.en['toast.linkError'];
+          showToast(msg);
+        }, 200);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const stubByKey = Object.fromEntries(FEATURES.map(f => [f.key, f]));
 
@@ -4099,19 +4293,30 @@
 
         <main id="main" tabIndex={-1} className="flex-1 outline-none" aria-label={tabLabel}>
           {active === 'home'   && <HomeView mode={mode} setActive={setActive} />}
-          {active === 'intake' && <IntakeTab state={data} set={set} setActive={setActive} loadDemo={loadDemo} resetState={resetState} />}
+          {active === 'intake' && <IntakeTab state={data} set={set} setActive={setActive} loadDemo={loadDemo} resetState={resetState} showToast={showToast} />}
           {active === 'risk'   && <RiskTab state={data} setActive={setActive} />}
           {active === 'plan'   && <PlanTab state={data} setActive={setActive} />}
           {active === 'coach'  && <CoachTab state={data} setActive={setActive} />}
           {active === 'traj'   && <TrajectoryTab state={data} setActive={setActive} />}
           {active === 'refs'   && <RefsTab />}
-          {active === 'cohort' && <CohortTab setActive={setActive} loadDemo={loadDemo} />}
+          {active === 'cohort' && <CohortTab setActive={setActive} loadDemo={loadDemo} showToast={showToast} />}
           {active !== 'home' && active !== 'refs' && active !== 'intake' && active !== 'risk' && active !== 'plan' && active !== 'coach' && active !== 'traj' && active !== 'cohort' && stubByKey[active] && (
             <StubTab data={stubByKey[active]} setActive={setActive} />
           )}
         </main>
 
         <Footer />
+
+        {/* Toast — bottom-center 1.8s editorial confirmation */}
+        <div className={`nn-toast ${toast ? 'show' : ''}`} role="status" aria-live="polite" key={toast?.key || 'none'}>
+          {toast && (
+            <>
+              <span className="toast-dot" aria-hidden="true"/>
+              <span>{toast.message}</span>
+              {toast.meta && <span className="toast-meta">· {toast.meta}</span>}
+            </>
+          )}
+        </div>
       </div>
       </LangContext.Provider>
     );
