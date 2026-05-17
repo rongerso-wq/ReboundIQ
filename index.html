@@ -189,6 +189,9 @@
       font-variant-numeric: tabular-nums;
     }
     @media (min-width: 768px) { .stat-figure { font-size: 72px; } }
+    /* Smaller variant — reserve the full 72px for the single hero metric per tab. */
+    .stat-figure--small { font-size: 36px; }
+    @media (min-width: 768px) { .stat-figure--small { font-size: 44px; } }
 
     /* Author signature — kept minimal in the footer */
     .signature {
@@ -321,6 +324,21 @@
       /* No box-shadow — editorial Novo rule (no shadows anywhere). */
     }
 
+    /* Mobile tab strip — soft right-edge fade so users know it scrolls */
+    .mobile-tab-strip {
+      -webkit-mask-image: linear-gradient(to right, black 88%, transparent 100%);
+              mask-image: linear-gradient(to right, black 88%, transparent 100%);
+    }
+    :root[dir="rtl"] .mobile-tab-strip {
+      -webkit-mask-image: linear-gradient(to left, black 88%, transparent 100%);
+              mask-image: linear-gradient(to left, black 88%, transparent 100%);
+    }
+
+    /* Trajectory chart — guarantee a readable label size on the smallest phones */
+    .traj-chart-wrap { min-width: 480px; }
+    @media (min-width: 480px) { .traj-chart-wrap { min-width: 0; } }
+    .traj-chart-scroller { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
     /* Coach chat thread */
     .coach-thread {
       max-height: 540px;
@@ -363,6 +381,9 @@
     }
     .coach-input:focus { outline: none; border-color: var(--nn-navy); }
     .coach-input:disabled { background: var(--nn-bg-2); cursor: not-allowed; }
+    @media (max-width: 640px) {
+      .coach-input { min-height: 64px; }
+    }
     .coach-quickstart {
       display: inline-flex; align-items: center;
       padding: 10px 16px;
@@ -436,11 +457,13 @@
       inset-inline-start: 0;
       inset-inline-end: 0;
     }
-    /* Borders + paddings — flip to logical properties so they mirror in RTL */
+    /* Borders + paddings — flip to logical properties so they mirror in RTL.
+       !important because Tailwind preflight + utility-class shorthand can
+       reapply 4-side border styles that would otherwise leak through. */
     .border-l-2 { border-left-width: 2px; }
     :root[dir="rtl"] .border-l-2 {
-      border-left-width: 0;
-      border-right-width: 2px;
+      border-left-width: 0 !important;
+      border-right-width: 2px !important;
     }
     :root[lang="he"] .num-tag,
     :root[lang="he"] .nav-link .idx {
@@ -1481,9 +1504,9 @@
       <div className="utility-strip no-print">
         <div className="max-w-[1240px] mx-auto px-5 md:px-8 py-2.5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4 md:gap-6 text-[11.5px]">
-            <span className="opacity-80">{t('app.tag')}</span>
+            <span className="opacity-80 num">{t('app.version')}</span>
             <span className="hidden md:inline opacity-50">·</span>
-            <span className="hidden md:inline opacity-80 num">{t('app.version')}</span>
+            <span className="hidden md:inline opacity-80">{t('app.subtitle')}</span>
           </div>
           <div className="flex items-center gap-4 md:gap-5">
             <span className="text-[10.5px] tracking-[0.14em] uppercase opacity-60 hidden sm:inline">{t('app.lang.label')}</span>
@@ -1525,7 +1548,7 @@
         </div>
         {/* mobile tabs */}
         <div className="md:hidden border-t hair-top">
-          <div className="px-5 py-3 flex items-center gap-5 overflow-x-auto">
+          <div className="mobile-tab-strip px-5 py-3 flex items-center gap-5 overflow-x-auto">
             {tabs.map((tab, i) => (
               <button key={tab.key}
                 onClick={()=>setActive(tab.key)}
@@ -2548,7 +2571,11 @@
           {/* Chart */}
           <div className="mt-12 hair-top pt-12">
             <div className="border p-5 md:p-7" style={{borderColor:'var(--nn-hair)'}}>
-              <TrajectoryChart points={points} baselineKg={baselineKg} currentKg={currentKg}/>
+              <div className="traj-chart-scroller">
+                <div className="traj-chart-wrap">
+                  <TrajectoryChart points={points} baselineKg={baselineKg} currentKg={currentKg}/>
+                </div>
+              </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-7 gap-y-2 text-[12px]" style={{color:'var(--nn-ink-soft)'}}>
                 <span className="inline-flex items-center gap-2">
                   <span style={{display:'inline-block', width:18, height:0, borderTop:'1.4px dashed var(--nn-bad)'}}/> {t('traj.legend.do')}
@@ -2597,7 +2624,7 @@
               tone="good" />
             <div>
               <div className="text-[11px] uppercase tracking-[0.18em] mb-3" style={{color:'var(--nn-ink-dim)'}}>{t('traj.out.lost')}</div>
-              <div className="stat-figure num">{lostKg.toFixed(1)}<span className="text-[26px] font-light ml-1" style={{color:'var(--nn-ink-soft)'}}>kg</span></div>
+              <div className="stat-figure stat-figure--small num">{lostKg.toFixed(1)}<span className="text-[18px] font-light ml-1" style={{color:'var(--nn-ink-soft)'}}>kg</span></div>
               <div className="mt-4 text-[13.5px] leading-[1.6]" style={{color:'var(--nn-ink-soft)'}}>
                 {t('traj.out.lost.body', { pct: pctLostKept(currentKg).toFixed(1) })}
               </div>
@@ -2626,7 +2653,7 @@
     return (
       <div>
         <div className="text-[11px] uppercase tracking-[0.18em] mb-3" style={{color:'var(--nn-ink-dim)'}}>{label}</div>
-        <div className="stat-figure num" style={{color}}>{kg.toFixed(1)}<span className="text-[26px] font-light ml-1" style={{color:'var(--nn-ink-soft)'}}>kg</span></div>
+        <div className="stat-figure stat-figure--small num" style={{color}}>{kg.toFixed(1)}<span className="text-[18px] font-light ml-1" style={{color:'var(--nn-ink-soft)'}}>kg</span></div>
         <div className="mt-4 text-[13.5px] leading-[1.6]" style={{color:'var(--nn-ink-soft)'}}>
           {t('traj.out.body.kg')} <span className="num font-semibold" style={{color}}>{regain.toFixed(1)} {t('traj.out.body.kg.suffix')}</span>
           {' '}{t('traj.out.body.kept')} <span className="num font-semibold" style={{color:'var(--nn-ink)'}}>{loss.toFixed(1)}%</span> {t('traj.out.body.kept.suffix')}
@@ -2955,7 +2982,7 @@
 
           {/* Strategy banner */}
           <div className="mt-12 hair-top pt-12">
-            <div className="eyebrow mb-3" style={{color: rx.strategy.tone === 'bad' ? 'var(--nn-bad)' : rx.strategy.tone === 'warn' ? 'var(--nn-warn)' : 'var(--nn-blue)'}}>
+            <div className="eyebrow mb-3">
               {t('plan.strategy.eyebrow')}
             </div>
             <div className="grid md:grid-cols-12 gap-8">
@@ -3153,9 +3180,9 @@
 
   function Row({ label, children }) {
     return (
-      <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-[12px]" style={{color:'var(--nn-ink-dim)'}}>{label}</dt>
-        <dd className="text-[13.5px] num" style={{color:'var(--nn-ink)'}}>{children}</dd>
+      <div className="grid items-baseline gap-x-3" style={{gridTemplateColumns: '1fr auto'}}>
+        <dt className="text-[12px] leading-snug" style={{color:'var(--nn-ink-dim)'}}>{label}</dt>
+        <dd className="text-[13.5px] num text-right" style={{color:'var(--nn-ink)'}}>{children}</dd>
       </div>
     );
   }
@@ -3165,8 +3192,8 @@
       <div>
         <div className="text-[11px] uppercase tracking-[0.14em] mb-3" style={{color:'var(--nn-ink-dim)'}}>{label}</div>
         <div className="flex items-baseline gap-2">
-          <span className="stat-figure">{figure}</span>
-          <span className="text-[20px] md:text-[24px] font-light" style={{color:'var(--nn-ink-soft)'}}>{unit}</span>
+          <span className="stat-figure stat-figure--small num">{figure}</span>
+          <span className="text-[16px] md:text-[18px] font-light" style={{color:'var(--nn-ink-soft)'}}>{unit}</span>
         </div>
         {aside && <div className="mt-2 text-[12.5px] num" style={{color:'var(--nn-blue)'}}>{aside}</div>}
         <ul className="mt-4 space-y-2 text-[13px] leading-[1.55]" style={{color:'var(--nn-ink-soft)'}}>
@@ -3242,7 +3269,9 @@
 
   function coachWelcome(rrs, rx, lang, t) {
     const b = rrsBucket(rrs.pHold12m, lang);
-    return `${t('coach.welcome.prefix')} ${b.label.toLowerCase()} ${t('coach.welcome.middle')} "${rx.strategy.label.toLowerCase()}". ${t('coach.welcome.body')}\n\n${t('coach.welcome.prompt')}`;
+    // Don't .toLowerCase() — drug names (Wegovy SC, CagriSema) and bucket
+    // labels read better cased mid-sentence. Also no-op in Hebrew.
+    return `${t('coach.welcome.prefix')} ${b.label} ${t('coach.welcome.middle')} "${rx.strategy.label}." ${t('coach.welcome.body')}\n\n${t('coach.welcome.prompt')}`;
   }
 
   // ---------- CoachTab ----------
@@ -3408,7 +3437,7 @@
           {/* Footer */}
           <div className="hair-top mt-14 pt-8 flex flex-wrap items-center justify-between gap-5 text-[12px]" style={{color:'var(--nn-ink-dim)'}}>
             <div>
-              {t('coach.powered')} <span style={{color:'var(--nn-navy)', fontWeight:600}}>Claude Sonnet 4.6</span> {t('coach.proxy')}
+              {t('coach.powered')} Claude Sonnet 4.6 {t('coach.proxy')}
             </div>
             <div className="flex items-center gap-5">
               <button className="arrow-link" onClick={clearConv} disabled={loading}>
@@ -3666,8 +3695,8 @@
       <div>
         <div className="text-[11px] uppercase tracking-[0.18em] mb-3" style={{color:'var(--nn-ink-dim)'}}>{label}</div>
         <div className="flex items-baseline gap-3">
-          <span className="stat-figure num">{n}</span>
-          <span className="text-[18px] font-light" style={{color:'var(--nn-ink-soft)'}}>{t('cohort.dist.of')} {total}</span>
+          <span className="stat-figure stat-figure--small num">{n}</span>
+          <span className="text-[16px] font-light" style={{color:'var(--nn-ink-soft)'}}>{t('cohort.dist.of')} {total}</span>
           <span className={`risk-pill ml-2`}><span className={`dot dot-${tone}`}/><span className="num">{pct}%</span></span>
         </div>
       </div>
