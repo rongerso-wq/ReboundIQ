@@ -313,9 +313,68 @@ Each `<tr>` is keyboard-activatable via Space/Enter. The handler calls `e.preven
 
 Top-level [`DEMO.md`](DEMO.md) is the 5-minute golden-path script — recorded walkthrough order, what to say, what to point at. Update it whenever a phase changes the demo flow.
 
-## Phase status — project complete
+## Bilingual (Phase 8 — EN/HE with full RTL)
 
-All 7 phases of the approved plan have shipped (see roadmap below for full history).
+The app runs in English by default with a one-click switch to Hebrew (right-to-left). Two-layer pattern — keyed dictionary for static UI chrome, inline `T(en, he)` helper for engine-generated dynamic content.
+
+### Static UI chrome — `STRINGS` + `useT()`
+
+`STRINGS = { en: {...}, he: {...} }` near the top of the Babel script holds every literal UI string keyed dot-style (`'home.title1'`, `'intake.f.age'`, etc.). Resolved at render time via the `useT()` hook:
+
+```jsx
+const t = useT();
+<h1>{t('home.title1')}</h1>
+```
+
+`useT()` returns a function that does fall-through: `STRINGS[lang][key] ?? STRINGS.en[key] ?? key`. Supports `{var}` interpolation when called as `t('plan.life.protein.aside', { g: 156 })`.
+
+**Adding a new visible string:** add the key to **both** `STRINGS.en` AND `STRINGS.he`. If you forget HE, the EN fallback shows in Hebrew mode — not broken, but obvious. Don't leave fallbacks in place; they're a regression.
+
+### Engine-generated content — inline `T(en, he)` via `makeT(lang)`
+
+`computeRRS`, `computeMaintenanceRx`, `strategyForPatient`, `lifestyleForPatient`, `followUpForBucket`, `redFlagsForPatient`, `rrsBucket`, `tapersFor`, `bridgeOralFor` all accept a `lang` parameter (default `'en'`). Each builds a local `const T = makeT(lang)` helper and calls `T(en, he)` inline for every dynamic label, hint, rationale, alert body, taper step note, etc.
+
+Why two patterns? The engines generate **conditional** content (bucket → strategy headline → rationale → cited steps) where only a handful of variants ever appear at once. Keying every possible string into `STRINGS` would balloon the dict. The inline `T()` form keeps the en/he pair next to the logic that picks it. **Don't replace the inline form with keys** — you lose the locality that makes the engines auditable.
+
+### Wiring lang through the components
+
+`App` holds `const [lang, setLang] = useState('en')` and provides it via `<LangContext.Provider value={lang}>` wrapping the entire app. The `useLang()` hook returns the current lang anywhere; components that consume engine output use it to thread lang into engine calls:
+
+```jsx
+const lang = useLang();
+const rrs = useMemo(() => computeRRS(state, lang), [state, lang]);
+const rx  = useMemo(() => computeMaintenanceRx(state, rrs, lang), [state, rrs, lang]);
+const b   = rrsBucket(rrs.pHold12m, lang);
+```
+
+**Don't forget the `lang` dependency in `useMemo`.** Without it, switching to HE on the Risk tab would keep showing English contribution labels until state changed.
+
+### `<html lang dir>` flip
+
+A `useEffect` in `App` watches `lang` and sets `document.documentElement.lang = lang` and `document.documentElement.dir = (lang === 'he' ? 'rtl' : 'ltr')`. These attributes drive the CSS RTL overrides.
+
+### RTL CSS
+
+- `:root[lang="he"] body` swaps Inter → Heebo (already vendored in `vendor/fonts/`).
+- `:root[lang="he"] .display` adjusts letter-spacing to `-0.005em` and line-height to `1.16` — Latin tight tracking doesn't fit Hebrew typography.
+- `:root[lang="he"] .num`, `.stat-figure`, `.risk-pill`, `input[type="number"]` force `direction: ltr; unicode-bidi: isolate` so numbers, percentages and `12 mo · 95%`-style pills render correctly inside Hebrew prose. **Always wrap numeric output in `.num`** — without it, surrounding bidi context will reverse the digits.
+- The `.border-l-2` shorthand used by alert callouts has an RTL flip rule that swaps to right-border when `dir="rtl"`.
+
+### Clinical terms that stay English in both languages
+
+Drug names (Wegovy, Ozempic, Saxenda, Rybelsus, CagriSema), lab acronyms (HbA1c, LDL, ALT, BMI, MASH, MASLD, CVD, CKD, T2D), and ICD-10 codes (E66.x, K76.81, etc.) are intentionally left in English in HE prose. This matches Octo-perio's convention and how Hebrew-speaking clinicians actually write notes. Don't transliterate.
+
+### Demo profiles + option groups
+
+`DEMO_PATIENTS[]` carries `nameKey / riskKey / summaryKey` instead of literal strings — resolved via `t()` at render. Same pattern for `SEX_OPTIONS` and `BODY_COMP_OPTIONS` (`labelKey` field, resolved in `IntakeTab` via `.map(o => ({...o, l: t(o.labelKey)}))` before passing to `ChipGroup`). `AGENT_OPTIONS` stays literal because every label is a drug name.
+
+### Language toggle UI
+
+Lives in the navy `UtilityStrip` at the top of the page, next to the Clinician/Patient audience toggle. Two buttons: `EN` and `עברית`. Marked with `aria-pressed`. The Hebrew button has `lang="he"` so AT pronounces "עברית" correctly.
+
+## Phase status — all 8 phases shipped
+
+All approved phases have shipped, plus the GitHub push for deploy.
 
 - **Phase 1 — skeleton.** Shipped. Vendor copy, CSP, editorial Novo brand system, utility strip + Clinician/Patient toggle, sticky header with 8 tabs, Overview page (hero + 3-stat band + opportunity split + 6-feature grid + closing CTA + footer), References tab fully populated. **Note:** Phase 1 went through two visual rewrites — liquid-glass (rejected as "gimmicky") and dark navy gradient (rejected as "doesn't feel like Novo"). Current editorial-white look is the approved one. Don't reintroduce glass, gradients, or dark hero backgrounds.
 - **Phase 2 — Intake.** Shipped. Single shared state model in `App`, ~25-field intake form across 7 numbered sections, three demo patients (A/B/C), form primitives (`<Field>`, `<NumberInput>`, `<ChipGroup>`, `<Toggle>`, `<FormSection>`), auto-derived BMI / % loss / lean %, completion counter, "Compute risk" CTA that jumps to Risk Score tab.
@@ -324,14 +383,101 @@ All 7 phases of the approved plan have shipped (see roadmap below for full histo
 - **Phase 5 — AI Coach.** Shipped. `api/coach.js` Edge function (10-gate hardening pattern with server-side red-flag refusal), `CoachTab` editorial chat UI, quickstart pills, typed error map, locked system prompt. CSP unchanged — same-origin via `/api/coach`.
 - **Phase 6 — Cohort + print pipeline.** Shipped. `CohortTab` (HCP-only, synthetic 10-patient panel, sortable, click-to-load), `PrintableReferralLetter` (with auto ICD-10 mapping), `PrintableMaintenanceContract`, `.screen-only` / `.print-only` / `.no-print` seam tested across both pages.
 - **Phase 7 — Polish + a11y + demo script.** Shipped. Skip link, sr-only `role="status"` live region for tab/mode announcements, `<main id tabIndex>` landmark, `nnFadeUp` entrance animation, `prefers-reduced-motion` kill switch, trajectory chart text sized for mobile, cohort row keyboard activation. `DEMO.md` golden-path script.
+- **Phase 8 — Bilingual EN/HE.** Shipped (2026-05-16). `STRINGS = { en, he }` dictionary + `useT()` hook for static UI chrome; inline `makeT(lang)` helper threaded through every engine for dynamic content (contribution labels, strategy rationales, alert bodies, taper notes, red flags, lifestyle reasons, follow-up cadence labels). Language toggle in utility strip flips `<html lang dir>`; RTL CSS swaps to Heebo display font, forces LTR numbers, mirrors logical borders. Clinical terms (drug names, lab acronyms, ICD-10) stay English in both languages.
 
-**The project is feature-complete against the original plan.** Open work, if any, is: visual-polish iteration (the user wanted to revisit design "after"); a deploy + live-coach smoke test; an EN/HE bilingual pass for Novo Israel (door left open via the unused Heebo woff2 in `vendor/fonts/`).
+**Repo lives at `https://github.com/rongerso-wq/ReboundIQ.git`** as of 2026-05-16. To deploy: import to Vercel, set `ANTHROPIC_API_KEY` env (Production + Preview), deploy. Vercel auto-detects the static site + Edge function from `vercel.json`. Roadmap lives at `C:\Users\litbe\.claude\plans\i-want-to-built-reactive-umbrella.md`.
 
-Roadmap lives at `C:\Users\litbe\.claude\plans\i-want-to-built-reactive-umbrella.md`.
+## Post-launch audit pass (Tiers 2–5, 2026-05-16/17)
+
+After Phase 8 shipped, Agent Smith (security) and Agent Gourges (design) ran a thorough audit. Gourges baseline score: 8.2 / 10; post-audit projected 9.5+. Six commits closed the findings.
+
+### Critical fix (caught by Gourges)
+
+`useRef` was missing from the React destructure at the top of the Babel script. The Coach tab crashed at runtime the moment a user clicked it. Fixed in `11437a0`. **Future-me: always destructure the React hooks you actually use** (`useState, useMemo, useEffect, useRef`) at the top of the Babel script; the lazy-runtime "React is global" assumption hides this category of bug.
+
+### Tier 2 — editorial discipline (`f8e484b`)
+
+- **`AgentLineup` component** in PlanTab — six hairline chip-cards (Wegovy SC · Wegovy pill · Ozempic · Rybelsus · Saxenda · CagriSema-filed), current agent gets a navy bottom-underline + "CURRENT" mark, bridge target gets dashed-blue + "BRIDGE TARGET" mark when `strategy.key === 'bridge-oral'`. A caption underneath fires only when bridging. **This is the visual asset that makes the "portfolio-aware" claim true** — previously the demo had to narrate portfolio-awareness; now the screen shows it. Don't strip it for "cleanliness" — it's load-bearing for the pitch.
+- **Tinted alert backgrounds were stripped** in four places (sarcopenic warning, PlanTab alerts row, Coach disclosure, Coach error). Alerts now use a single semantic device: colored left bar (`.border-l-2` with inline `borderColor`) + colored eyebrow. **Don't re-add tinted backgrounds** (`#FDF6F4` / `#FBF7EE` etc.) — that combination reads as "Notion / Linear" and undermines the editorial-Novo discipline.
+- **`.demo-card:hover` no longer has a box-shadow.** It used to be the only place in the entire app that broke the "no shadows" rule. Hairline border-color transition + 2px translateY lift still convey interactivity.
+- **`:lang(he) .mode-btn`** resets `letter-spacing: 0` and `text-transform: none`. The 0.10em tracking inherited from `.mode-btn` was smashing Hebrew letters apart on the "עברית" / "רופא/ה" / "מטופל/ת" buttons. Same fix protects any future button using `.mode-btn` in Hebrew mode.
+- **The Opportunity-section CTA** on the home page is now a real `<button type="button">` instead of `<span role="link">`. Keyboard reachable.
+
+### Tier 3 — server hardening (`0510f55`)
+
+All Smith moderate findings (M1–M6) closed inside `api/coach.js`. **Future-me: don't undo these — they're defense-in-depth that costs nothing and closes real bypasses.**
+
+- **Pre-sanitize every `messages[].content`** with `STRIP_INVISIBLES` *before* the red-flag detector and before forwarding upstream to Anthropic. Without this, `sui​cide` slips past `detectRedFlag` because the regex `\b` word boundaries fail across a zero-width glyph. The patient gets coached *into* self-harm content instead of getting hotline routing. The fix is one `for` loop; the bug would have been silent until it wasn't.
+- **`STRIP_INVISIBLES` covers** C0 controls + DEL + U+180E (Mongolian vowel separator) + U+200B–U+200F (zero-width + bidi marks) + U+202A–U+202E (bidi embedding/override) + U+2060–U+2064 (word joiner + invisible operators) + U+2066–U+2069 (isolate controls) + U+FEFF (BOM). Constructed via `String.fromCharCode` chain — **the literal regex form gets silently mangled by some toolchains** (verified twice). Don't "clean up" back to literals.
+- **`ALLOW_DEV_ORIGINS=1` env gate** wraps the `Origin: null` (`file://`) and `localhost` allowances. **Set it only on Vercel Preview, never on Production.** Without this, any sandboxed iframe (which sends `Origin: null`) could call `/api/coach` from a malicious page.
+- **Early body-size reject via `content-length` header** before `await req.text()` buffers anything.
+- **The `'unknown'` IP attribution fallback is gone.** Unattributed requests now return 400 instead of sharing one bucket (which would let a single misbehaving caller poison every honest one).
+- **`patient_context` array fields use `STRIP_INVISIBLES`** (was `STRIP_CONTROLS`). Closes the inconsistency where `topDrivers` strings could carry zero-width chars into the `<patient_context>` JSON block.
+
+### Tier 4 — editorial polish layer (`bf82928`)
+
+Compounding small fixes. None individually critical; together they move the typography hierarchy and mobile experience from "good" to "polished."
+
+- **`.stat-figure--small`** (36/44px) applied to `LifestyleStat`, `Outcome`, the `Lost-on-therapy` panel, and `DistStat`. **Reserve the full 72px `.stat-figure` for the single hero metric per tab** (the 95% on RiskTab, the 11.6pp on home). Anything else at 72px competes with the hero and flattens hierarchy.
+- **`Row` component** (PlanTab "At a glance" card) is grid-based (`gridTemplateColumns: '1fr auto'`) so long Hebrew labels can wrap without breaking right-edge alignment of the value.
+- **`.mobile-tab-strip`** has a `mask-image: linear-gradient` fade on the right edge (left in RTL) so users on `<768px` know the tab nav scrolls.
+- **`.traj-chart-scroller` + `.traj-chart-wrap` with `min-width: 480px`** lets the SVG chart horizontally scroll on phones <480px instead of cramming labels into illegible 5px text.
+- **`.coach-input` mobile min-height** drops to 64px under 640px so the Send button stays above the iPhone-SE fold.
+- **`coachWelcome` no longer `.toLowerCase()`s bucket + strategy labels.** Drug names ("Wegovy SC") and capitalized labels mid-sentence read intentional.
+- **`.border-l-2` RTL flip uses `!important`** to override Tailwind preflight defaults. Without `!important` the alert callouts can render with hairlines on all four sides in RTL mode.
+- **Utility strip drops the personal credit** (was `t('app.tag')`). The Caveat footer signature is the only place the credit appears now — matches the CLAUDE.md "signature lives only in footer" rule.
+- **PlanTab strategy eyebrow stays `--nn-blue`** regardless of strategy tone (the dynamic color was triple-coding the same semantic that two pills already carry).
+- **Coach footer's "Claude Sonnet 4.6"** is no longer bold + navy. The model name was pulling eye away from the product name in a 12px caption.
+
+### Tier 5 — strategic polish (`4ecefb6`)
+
+Six of eight items shipped. Skipped: (1) pre-compile JSX → that's the next task documented below, and (2) live coach smoke test → requires Vercel deploy + the user's API key.
+
+- **References anchor system.** Every `<article>` in `RefsTab` carries `id="ref-{key}"` with `scrollMarginTop: 80px`. Stat sources on the home page are now clickable links that call `setActive('refs')`, then `setTimeout(80ms)` → `scrollIntoView({behavior:'smooth'})`. **Don't skip the timeout** — without it the scroll fires before the References tab has mounted its DOM and silently no-ops.
+- **`<Stat>` component now takes optional `sourceKey` + `setActive` props.** When both are present, the source caption renders as an `<a href="#ref-{key}">` with a quiet underline that hovers to navy. When absent, falls back to a plain `<div>`. Same component, two modes — keeps the visual unchanged on screens that don't link.
+- **Animated trajectory chart.** `<polyline>` → `<path>` with `d="M... L... L..."`. CSS `.traj-path { transition: d 240ms }` morphs the curve smoothly when the adherence slider moves. Markers use `transition: cx, cy` so they slide in lockstep. **Modern browsers transition `d` natively** for paths with matching point counts — both curves use the same sample timesteps, so the morph is well-defined. Don't go back to `polyline` (the `points` attribute doesn't transition).
+- **`.cohort-table` sticky-first-column under 900px viewport.** The Risk pill column sticks left (right in RTL) so users can scroll horizontally without losing the patient-identifier anchor. Hover background applied to the sticky cell too.
+- **Toast pattern.** Single global `<Toast>` element at the bottom of `<App>`'s JSX, bottom-center, 1.8s auto-dismiss via a `useRef` timer in `App`. `showToast(message, meta?)` is the only API — threaded down to `IntakeTab` and `CohortTab` as a prop. Fires on demo-profile load, cohort-row click, share-link copy, share-link restore. Bilingual (`STRINGS.toast.*`). Don't introduce a separate toast lib — the editorial style is hairline + dot + navy fill, intentionally minimal.
+- **URL hash share / restore (`#a=...`).** `encodeAssessment(state)` drops empty-string + `false` fields, JSON.stringifies, then `btoa(unescape(encodeURIComponent(json)))` so non-ASCII (Hebrew dose strings) round-trips. `decodeAssessment(hash)` whitelists keys against `INITIAL_STATE` to prevent prototype pollution. On `App` mount, if the URL hash matches `[#&]a=([A-Za-z0-9+/=_-]+)`, the assessment is restored, the user is sent to the Risk tab, a confirmation toast fires, and the hash is cleared via `history.replaceState` so refresh doesn't silently re-restore stale state. **No server persistence** — this is opt-in client-side share for KOL workflows. The "Share assessment" arrow-link in `IntakeTab`'s footer is the entry point; clipboard with `prompt()` fallback.
+
+## Production build pipeline (Tier 5.1 — pre-compile)
+
+The single-file Babel-in-browser pattern is great for dev (`open index.html` in Chrome and it works) but ships with two CSP relaxations that production-grade pharma deployments will flag:
+
+- `script-src 'unsafe-eval'` (Babel Standalone needs `eval` to compile JSX at runtime)
+- `script-src 'unsafe-inline'` (the `<script type="text/babel">` block is inline)
+
+The fix is to pre-compile the JSX → static JS at build time, ship that compiled bundle to Vercel, and tighten the production CSP accordingly. The source `index.html` stays the dev artifact; a new `dist/index.html` is the deploy target.
+
+### `build.sh` — what it does
+
+1. **Extracts** the `<script type="text/babel">` block from `index.html` into a temp `.jsx` file.
+2. **Compiles** it with esbuild via `npx --yes esbuild` (no install needed): `--loader=jsx --bundle=false --minify` → produces a static JS string.
+3. **Re-injects** the compiled JS into `index.html` as `<script defer>` (no type="text/babel"), drops the `vendor/babel.min.js` `<script>` reference, and writes `dist/index.html`.
+4. **Copies** `vendor/` (sans `babel.min.js`) and `api/` to `dist/`.
+5. **Writes** a tightened `dist/vercel.json` with the production CSP (no `'unsafe-eval'`, no `script-src 'unsafe-inline'`).
+
+Run via `bash build.sh` from the project root. The script is idempotent — re-running overwrites `dist/`.
+
+### `dist/` is the deploy target
+
+`vercel.json` at the repo root deploys `dist/` (not the project root). Source files stay in place for dev. Future Claude instances: **don't edit `dist/` directly — always re-run `build.sh`.** The `dist/` directory is committed to the repo (it's tiny without Babel) so Vercel's build step is just a static file serve.
+
+### Tightened production CSP
+
+`dist/vercel.json` carries:
+- `script-src 'self'` — no `'unsafe-eval'`, no `'unsafe-inline'`
+- `style-src 'self' 'unsafe-inline'` — Tailwind Play still needs inline style injection at runtime; left in. Migrating to a pre-built Tailwind CSS file is a future iteration.
+- Everything else (`connect-src 'self'`, `frame-ancestors 'none'`, `form-action 'none'`, `object-src 'none'`) unchanged.
+
+If a future iteration also drops Tailwind Play (replaces with a pre-built `dist/styles.css` via `npx tailwindcss`), you can remove `style-src 'unsafe-inline'` too and reach a fully tightened CSP.
 
 ## Conventions
 
 - All clinical thresholds anchored to a citation comment (PMID/DOI). Match this style for any new logic. Add the citation to `REFERENCES` too.
-- Adding a new bilingual string: defer — the `STRINGS = {}` pattern from Octo-perio is not wired yet because the project is English-only. Door left open for a Hebrew pass for Novo Israel later; if you add it, mirror the Octo-perio `STRINGS = { he: {...}, en: {...} }` + `t()` pattern exactly.
+- **Adding a new visible string:** keyed UI strings go in `STRINGS.en` AND `STRINGS.he` (don't add only one — EN fallback hides the bug). Engine-generated dynamic content uses inline `T(en, he)` via the local `makeT(lang)` helper, paired right where the logic that picks it lives. See the "Bilingual" architecture section for the rationale on the two-layer split.
+- **Adding a new clinical engine helper** (anything that returns localized labels): accept `lang = 'en'` as the last argument, build `const T = makeT(lang)` at the top, branch every dynamic string via `T(en, he)`. Thread `lang` through from any component that calls it. Don't forget to add `lang` to the `useMemo` dependency array — without it, switching language won't trigger a re-render.
 - Vendoring more libraries: drop the file into `vendor/`, reference with relative path, never use `unpkg`/`cdn` URLs.
 - AI honesty: the risk score is evidence-anchored, not ML. Don't reintroduce fake "confidence intervals" or "model predictions" without discussing first.
+- **Numeric output inside Hebrew prose must be wrapped in `.num`** — without it, bidirectional context will reverse digits. The CSS already forces `direction: ltr; unicode-bidi: isolate` on `.num` under `:root[lang="he"]`.
+- **Don't commit secrets.** `ANTHROPIC_API_KEY` lives only in Vercel project env; no `.env` files in the repo. The coach returns `NOT_CONFIGURED` if the key is missing — that's the expected local-dev state.

@@ -94,19 +94,42 @@ Click any column header to sort — risk, age, agent, weeks on therapy, % loss. 
 - **OASIS 4 bridge.** When a high-risk patient on Wegovy SC wants off the injectable but has no cardio indication, the plan generates a bridge titration to oral Wegovy 25 mg/d (1.5 → 4 → 9 → 25 over 16 weeks) — buys a year of protection.
 - **Why no CagriSema taper?** It's filed with FDA but not yet approved. The agent shows up in the chip list marked "Filed" but the taper schedule is a one-row placeholder pending the approved label.
 
-## Setup notes for the live coach
+## Dev vs production build
 
-To make the coach actually respond:
+**Dev path (no build step):**
+Open `index.html` directly in Chrome (`file://` works). Babel Standalone compiles the inline JSX in the browser. Edit-and-refresh loop is instant. CSP includes `'unsafe-eval'` + `script-src 'unsafe-inline'` to accommodate Babel.
 
-1. Deploy to Vercel — the `vercel.json` and `api/coach.js` are ready.
-2. Set `ANTHROPIC_API_KEY` in Vercel project env (Production + Preview).
-3. Optional: `ALLOWED_ORIGINS` if demoing from a different domain.
+**Production path (Vercel-deployed):**
+`node build.js` extracts the inline JSX, pre-compiles it via esbuild → `dist/app.js`, writes `dist/index.html` with a tightened CSP (no `'unsafe-eval'`, no `script-src 'unsafe-inline'`), and copies `vendor/` without Babel (~750KB saved on initial load). `api/` stays at the repo root for Vercel's Edge function detection. Vercel runs the build automatically per `vercel.json` (`buildCommand: "node build.js"`).
 
-Without the key, the coach UI loads correctly but every send returns `NOT_CONFIGURED` with a friendly explanation banner. That's the expected local-dev state.
+## Deploy to Vercel
+
+1. **Import** the repo at [vercel.com/new](https://vercel.com/new) — pick **rongerso-wq/ReboundIQ**. Vercel auto-detects the build from `vercel.json`.
+2. **Set env vars** (Settings → Environment Variables):
+   - `ANTHROPIC_API_KEY` — your Claude API key (Production + Preview).
+   - `ALLOWED_ORIGINS` *(optional)* — comma-list of extra origins.
+   - `ALLOW_DEV_ORIGINS=1` *(optional, **Preview only**)* — enables `Origin: null` + `localhost` for local-dev demos. **Never set on Production.**
+3. **Deploy.** First build is ~30s (esbuild downloads on first run, then cached).
+
+Without `ANTHROPIC_API_KEY`, the coach UI loads correctly but every send returns `NOT_CONFIGURED` with a friendly explanation banner — that's the expected pre-key state.
+
+## Smoke test on the live URL
+
+1. Page loads — header, hero, 8 tabs visible.
+2. Toggle **עברית** in the utility strip → entire UI flips to Hebrew + RTL. Toggle back.
+3. Load Profile A → 1.8s toast confirms ("Profile A loaded · 23 fields populated").
+4. Compute risk → 95% hold appears, low risk pill.
+5. Plan tab → strategy banner shows AgentLineup with Wegovy pill underlined navy.
+6. Coach tab → click a quickstart → real Claude response within ~5 seconds.
+7. Plan tab → Print referral & contract → two-page clean PDF preview.
+8. Intake → Share assessment → URL copied to clipboard → paste in a fresh tab → assessment restores, "Assessment restored from link" toast fires.
+9. Cohort tab → sort columns, click any patient → loads into assessment + jumps to Risk.
+
+If any step fails, check the browser console for CSP violations or `useRef` / undefined errors. Both classes of bug were caught in the audit pass; if either reappears, something regressed.
 
 ## Known scope cuts (mention if asked)
 
-- No real ML training. Intentional — the formula is honest about its sources.
-- No bilingual (EN/HE) yet. Door left open via the `STRINGS = {}` pattern from Octo-perio if a Novo Israel pass becomes worthwhile.
-- No wearable / EHR integration. The intake form takes pasted numbers — clean separation from the data-collection problem.
-- No real cohort. The 10 patients are synthetic, clearly labeled.
+- **No real ML training.** Intentional — the formula is honest about its sources.
+- **No wearable / EHR integration.** The intake form takes pasted numbers — clean separation from the data-collection problem.
+- **No real cohort.** The 10 patients are synthetic, clearly labeled.
+- **Tailwind Play still loaded at runtime.** Migrating to a pre-built Tailwind CSS file (via `npx tailwindcss`) would let us drop `style-src 'unsafe-inline'` too. Today's CSP is "tight on script, loose on style."

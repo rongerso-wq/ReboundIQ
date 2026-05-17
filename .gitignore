@@ -1,0 +1,13 @@
+# Build output — Vercel rebuilds this from source on deploy.
+# Local builds via `node build.js` produce this for verification.
+dist/
+
+# esbuild scratch file
+.build-tmp.jsx
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
